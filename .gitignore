@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Project data generated locally
+data/processed/
+data/output/
+
+# Large provided archives and corpora
+*.zip
+data/raw/
+vllm-0.10.1/
+datasets_public/
+moulinette/
+en.subject.pdf
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
