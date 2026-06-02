@@ -1,7 +1,7 @@
 """Command-line interface for the RAG project."""
 
 from pathlib import Path
-from student.chunk_splitter import ChunkSplitter
+from student.indexing.index_manager import IndexManager
 
 import fire
 
@@ -15,7 +15,7 @@ class StudentCLI:
         max_chunk_size: int = 2000,
     ) -> None:
         """Index the vLLM repository."""
-        test = ChunkSplitter("vllm-0.10.1")
+        self.chunks = IndexManager("vllm-0.10.1", max_chunk_size)
         print(f"Indexing {repo_path} with max_chunk_size={max_chunk_size}")
 
     def search(self, query: str, k: int = 10) -> None:

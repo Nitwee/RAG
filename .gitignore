@@ -28,6 +28,7 @@ data/raw/
 vllm-0.10.1/
 datasets_public/
 moulinette/
+moulinette_pkg/
 en.subject.pdf
 
 # Editor and OS files
