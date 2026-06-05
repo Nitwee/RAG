@@ -30,22 +30,14 @@ class FilesReader:
 
     def read_files(self, folder: Path) -> None:
         all_files = folder.rglob("*")
-        i = 0
-        j = 0
         for filepath in all_files:
-            i += 1
             if not filepath.is_file():
                 continue
-
             filetype = self.file_type_sorter(filepath)
             if filetype == "python":
-                j += 1
-                self.py_files.append(self.read_source_file(filepath, filetype))
+                self.py_files.append(self.read_file(filepath, filetype))
             elif filetype == "text":
-                j += 1
-                self.txt_files.append(self.read_source_file(filepath, filetype))
-        print(i, j)
-
+                self.txt_files.append(self.read_file(filepath, filetype))
 
     def file_type_sorter(self, file: Path) -> Literal["python", "text"] | None:
         authorized = {".md", ".rst", ".txt", ".yaml", ".yml", ".toml"}
@@ -55,7 +47,7 @@ class FilesReader:
             return "text"
         return None
 
-    def read_source_file(
+    def read_file(
             self,
             filepath: Path,
             kind: Literal["python", "text"]
