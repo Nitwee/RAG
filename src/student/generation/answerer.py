@@ -59,10 +59,10 @@ class LLMAnswerer:
     def build_prompt(self, question: str, chunks: list[Chunk]) -> str:
         context = self.build_context(chunks)
         return (
-            "Answer the question using only the sources below.\n"
+            "Use only the sources below to answer the question.\n"
+            "Write a short, complete answer in natural language.\n"
             "If the sources do not contain the answer, say that the indexed "
-            "sources do not provide enough information.\n"
-            "Cite sources with labels like [S1] or [S2].\n\n"
+            "sources do not provide enough information.\n\n"
             f"Sources:\n{context}\n\n"
             f"Question:\n{question}\n\n"
             "Answer:"

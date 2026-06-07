@@ -17,7 +17,7 @@ from student.results.answer_results import (
     AnswerResultsFinder,
     AnswerResultsError,
 )
-
+from student.evaluator.eval import Evaluator, EvaluatorError
 
 class AnalyzerCLI:
     """CLI commands expected by the project subject."""
@@ -131,14 +131,22 @@ class AnalyzerCLI:
 
     def evaluate(
         self,
-        student_results_path: str,
-        dataset_path: str,
+        answers_path: str = "datasets_public/public/AnsweredQuestions/dataset_docs_public.json",
+        stud_results_path: str = "data/output/search_results/dataset_docs_public.json",
         k: int = 10,
     ) -> None:
         """Evaluate search results against a ground-truth dataset."""
-        print(f"Evaluating results={student_results_path}")
-        print(f"Ground truth dataset={dataset_path}")
-        print(f"k={k}")
+        try:
+            evaluator = Evaluator(
+                answers_path,
+                stud_results_path,
+                k
+            )
+        except EvaluatorError as e:
+            print(e)
+            return
+        print(evaluator)
+
 
 
 def main() -> None:

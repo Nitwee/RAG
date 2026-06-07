@@ -12,7 +12,7 @@ from student.models import (
     StudentSearchResults,
     StudentSearchResultsAndAnswer,
 )
-from student.retrieval.reader import Reader, ReaderError
+from student.reader.reader import Reader, ReaderError
 
 
 class AnswerResultsError(Exception):

@@ -1,4 +1,4 @@
-from student.retrieval.reader import Reader, ReaderError
+from student.reader.reader import Reader, ReaderError
 from student.models import (
         RagDataset,
         AnsweredQuestion,
