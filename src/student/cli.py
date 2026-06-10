@@ -9,6 +9,8 @@ from student.generation.answerer import LLMAnswerer, LLMAnswererError
 from student.indexing.index_manager import IndexManager, IndexManagerError
 from student.models import MinimalAnswer, MinimalSource
 from student.retrieval.bm_25 import BM25Retriever, BM25RetrieverError
+from student.retrieval.hybrid import HybridRetriever, HybridRetrieverError
+from student.retrieval.vectorizer import Vectorizer, VectorizerError
 from student.results.search_results import (
     SearchResultsFinder,
     SearchResultsError,
@@ -18,6 +20,7 @@ from student.results.answer_results import (
     AnswerResultsError,
 )
 from student.evaluator.eval import Evaluator, EvaluatorError
+
 
 class AnalyzerCLI:
     """CLI commands expected by the project subject."""
@@ -32,18 +35,30 @@ class AnalyzerCLI:
             self.manager = IndexManager(repo_path, max_chunk_size)
             retriever = BM25Retriever(self.manager.chunks)
             retriever.build()
-        except (IndexManagerError, BM25RetrieverError) as e:
+            vectorizer = Vectorizer(retriever.chunks)
+            vectorizer.build()
+        except (IndexManagerError, BM25RetrieverError, VectorizerError) as e:
             print(f"Error: {e}", file=sys.stderr)
             return
         print(f"Indexing {repo_path} with max_chunk_size={max_chunk_size}")
         print("Ingestion complete! Indices saved under data/processed/")
 
-    def search(self, query: str, k: int = 10) -> None:
+    def search(
+        self,
+        query: str,
+        k: int = 10,
+        method: str = "bm25",
+    ) -> None:
         """Search relevant chunks for a single query."""
         try:
-            retriever = BM25Retriever.load()
+            retriever = self.load_retriever(method)
             chunks = retriever.search(query, k)
-        except BM25RetrieverError as e:
+
+        except (
+            BM25RetrieverError,
+            VectorizerError,
+            HybridRetrieverError,
+        ) as e:
             print(f"Error: {e}", file=sys.stderr)
             return
         for chunk in chunks:
@@ -55,9 +70,13 @@ class AnalyzerCLI:
 
     def search_dataset(
         self,
-        dataset_path: str,
+        dataset_path: str = (
+            "datasets_public/public/UnansweredQuestions/"
+            "dataset_docs_public.json"
+        ),
         k: int = 10,
         save_directory: str = "data/output/search_results",
+        method: str = "bm25",
     ) -> None:
         """Search relevant chunks for every question in a dataset."""
         try:
@@ -65,6 +84,7 @@ class AnalyzerCLI:
                 dataset_path=dataset_path,
                 save_directory=save_directory,
                 k=k,
+                method=method,
             )
         except SearchResultsError as e:
             print(e)
@@ -77,10 +97,11 @@ class AnalyzerCLI:
         model_name: str = "Qwen/Qwen3-0.6B",
         max_new_tokens: int = 256,
         max_context_chars: int = 12000,
+        method: str = "bm25",
     ) -> None:
         """Answer one question using retrieved context."""
         try:
-            retriever = BM25Retriever.load()
+            retriever = self.load_retriever(method)
             chunks = retriever.search(question, k)
             answerer = LLMAnswerer(
                 model_name=model_name,
@@ -102,11 +123,30 @@ class AnalyzerCLI:
                 retrieved_sources=sources,
                 answer=answer,
             )
-        except (BM25RetrieverError, LLMAnswererError) as e:
+        except (
+            BM25RetrieverError,
+            VectorizerError,
+            HybridRetrieverError,
+            LLMAnswererError,
+        ) as e:
             print(f"Error: {e}", file=sys.stderr)
             return
 
         print(result.model_dump_json(indent=2))
+
+    def load_retriever(
+        self,
+        method: str,
+    ) -> BM25Retriever | Vectorizer | HybridRetriever:
+        """Load a retriever by name."""
+        method = method.lower()
+        if method == "bm25":
+            return BM25Retriever.load()
+        if method == "vector":
+            return Vectorizer.load()
+        if method == "hybrid":
+            return HybridRetriever.load()
+        raise HybridRetrieverError(f"Unknown retrieval method: {method}")
 
     def answer_dataset(
         self,
@@ -131,8 +171,12 @@ class AnalyzerCLI:
 
     def evaluate(
         self,
-        answers_path: str = "datasets_public/public/AnsweredQuestions/dataset_docs_public.json",
-        stud_results_path: str = "data/output/search_results/dataset_docs_public.json",
+        answers_path: str = (
+            "datasets_public/public/AnsweredQuestions/dataset_docs_public.json"
+        ),
+        stud_results_path: str = (
+            "data/output/search_results/dataset_docs_public.json"
+        ),
         k: int = 10,
     ) -> None:
         """Evaluate search results against a ground-truth dataset."""
@@ -140,13 +184,13 @@ class AnalyzerCLI:
             evaluator = Evaluator(
                 answers_path,
                 stud_results_path,
-                k
             )
+            score = evaluator.analyze(k)
+            print(f"Recall@{k}: {score:.3f}")
+
         except EvaluatorError as e:
             print(e)
             return
-        print(evaluator)
-
 
 
 def main() -> None:

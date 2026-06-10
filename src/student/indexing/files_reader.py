@@ -40,7 +40,27 @@ class FilesReader:
                 self.txt_files.append(self.read_file(filepath, filetype))
 
     def file_type_sorter(self, file: Path) -> Literal["python", "text"] | None:
-        authorized = {".md", ".rst", ".txt", ".yaml", ".yml", ".toml"}
+        authorized = {
+            ".cmake",
+            ".cpp",
+            ".cu",
+            ".cuh",
+            ".h",
+            ".hpp",
+            ".html",
+            ".in",
+            ".inl",
+            ".jinja",
+            ".js",
+            ".md",
+            ".rst",
+            ".sh",
+            ".toml",
+            ".tpl",
+            ".txt",
+            ".yaml",
+            ".yml",
+        }
         if file.suffix == ".py":
             return "python"
         elif file.suffix in authorized:

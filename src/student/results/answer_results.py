@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Sequence
 
 from pydantic import ValidationError
+from tqdm import tqdm
 
 from student.generation.answerer import LLMAnswerer, LLMAnswererError
 from student.indexing.chunk import Chunk
@@ -85,7 +86,7 @@ class AnswerResultsFinder:
     ) -> list[MinimalAnswer]:
         answer_results: list[MinimalAnswer] = []
 
-        for search_result in search_results:
+        for search_result in tqdm(search_results, desc="Answering questions"):
             chunks = self.sources_to_chunks(search_result.retrieved_sources)
             answer = self.answerer.answer(search_result.question_str, chunks)
             answer_results.append(

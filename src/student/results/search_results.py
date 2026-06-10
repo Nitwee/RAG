@@ -1,14 +1,18 @@
 from student.reader.reader import Reader, ReaderError
+from student.retrieval.bm_25 import BM25Retriever, BM25RetrieverError
+from student.retrieval.hybrid import HybridRetriever, HybridRetrieverError
+from student.retrieval.vectorizer import Vectorizer, VectorizerError
 from student.models import (
-        RagDataset,
-        AnsweredQuestion,
-        UnansweredQuestion,
-        MinimalSource,
-        MinimalSearchResults,
-        StudentSearchResults,
-    )
+    RagDataset,
+    AnsweredQuestion,
+    UnansweredQuestion,
+    MinimalSource,
+    MinimalSearchResults,
+    StudentSearchResults,
+)
 from pydantic import ValidationError
 from pathlib import Path
+from tqdm import tqdm
 
 
 class SearchResultsError(Exception):
@@ -21,12 +25,19 @@ class SearchResultsFinder:
         dataset_path: str,
         save_directory: str = "data/output/search_results",
         k: int = 10,
+        method: str = "bm25",
     ) -> None:
         try:
             self.reader = Reader()
-            self.reader.load_bm25()
+            self.retriever = self.load_retriever(method)
+
             dataset, input_path = self.validate_dataset(dataset_path)
-        except ReaderError as e:
+        except (
+            ReaderError,
+            BM25RetrieverError,
+            VectorizerError,
+            HybridRetrieverError,
+        ) as e:
             raise SearchResultsError(e)
         try:
             res = self.find_search_results(dataset.rag_questions, k)
@@ -39,6 +50,19 @@ class SearchResultsFinder:
             input_path.name,
             results.model_dump_json(indent=2),
         )
+
+    def load_retriever(
+        self,
+        method: str,
+    ) -> BM25Retriever | Vectorizer | HybridRetriever:
+        method = method.lower()
+        if method == "bm25":
+            return BM25Retriever.load()
+        if method == "vector":
+            return Vectorizer.load()
+        if method == "hybrid":
+            return HybridRetriever.load()
+        raise SearchResultsError(f"Unknown retrieval method: {method}")
 
     def validate_dataset(
             self,
@@ -57,10 +81,10 @@ class SearchResultsFinder:
         k: int,
     ) -> list[MinimalSearchResults]:
         search_results: list[MinimalSearchResults] = []
-        for question_data in dataset:
+        for question_data in tqdm(dataset, desc="Searching questions"):
             question_id = question_data.question_id
             question = question_data.question
-            chunks = self.reader.retriever.search(question, k)
+            chunks = self.retriever.search(question, k)
             sources = [
                 MinimalSource(
                     file_path=str(chunk.filepath),

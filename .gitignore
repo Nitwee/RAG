@@ -35,3 +35,5 @@ en.subject.pdf
 .DS_Store
 .idea/
 .vscode/
+
+priv/

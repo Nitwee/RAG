@@ -60,4 +60,4 @@ class StudentSearchResults(BaseModel):
 class StudentSearchResultsAndAnswer(StudentSearchResults):
     """Answer result file produced by the student pipeline."""
 
-    search_results: List[MinimalAnswer]
+    search_results: List[MinimalAnswer]  # type: ignore[assignment]
