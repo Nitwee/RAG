@@ -1,3 +1,5 @@
+"""Build student search result JSON files from datasets."""
+
 from student.reader.reader import Reader, ReaderError
 from student.retrieval.bm_25 import BM25Retriever, BM25RetrieverError
 from student.retrieval.hybrid import HybridRetriever, HybridRetrieverError
@@ -16,10 +18,14 @@ from tqdm import tqdm
 
 
 class SearchResultsError(Exception):
+    """Raised when dataset search result generation fails."""
+
     pass
 
 
 class SearchResultsFinder:
+    """Run retrieval for every question in a dataset."""
+
     def __init__(
         self,
         dataset_path: str,
@@ -27,6 +33,8 @@ class SearchResultsFinder:
         k: int = 10,
         method: str = "bm25",
     ) -> None:
+        """Load inputs, retrieve sources, and write search results."""
+
         try:
             self.reader = Reader()
             self.retriever = self.load_retriever(method)
@@ -55,6 +63,8 @@ class SearchResultsFinder:
         self,
         method: str,
     ) -> BM25Retriever | Vectorizer | HybridRetriever:
+        """Load the requested retrieval backend."""
+
         method = method.lower()
         if method == "bm25":
             return BM25Retriever.load()
@@ -68,6 +78,8 @@ class SearchResultsFinder:
             self,
             dataset_path: str,
             ) -> tuple[RagDataset, Path]:
+        """Read and validate a RAG dataset JSON file."""
+
         content, input_path = self.reader.validate_read(dataset_path)
         try:
             dataset = RagDataset.model_validate_json(content)
@@ -80,6 +92,8 @@ class SearchResultsFinder:
         dataset: list[AnsweredQuestion | UnansweredQuestion],
         k: int,
     ) -> list[MinimalSearchResults]:
+        """Retrieve top-k sources for each dataset question."""
+
         search_results: list[MinimalSearchResults] = []
         for question_data in tqdm(dataset, desc="Searching questions"):
             question_id = question_data.question_id

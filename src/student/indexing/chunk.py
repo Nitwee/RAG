@@ -1,3 +1,5 @@
+"""Shared chunk models and base chunking logic."""
+
 from pydantic import BaseModel, Field, ValidationError
 from pathlib import Path
 from abc import ABC, abstractmethod
@@ -5,10 +7,14 @@ from student.indexing.files_reader import FilesReader
 
 
 class ChunkError(Exception):
+    """Raised when a chunk cannot be created or validated."""
+
     pass
 
 
 class Chunk(BaseModel):
+    """Searchable text span with source offsets."""
+
     filepath: Path
     content: str
     first_character_index: int
@@ -16,11 +22,17 @@ class Chunk(BaseModel):
 
 
 class ChunkSize(BaseModel):
+    """Validation model for the configured chunk size."""
+
     max_chunk_size: int = Field(default=2000, ge=1, le=2000)
 
 
 class Chunker(ABC):
+    """Base class for source-specific chunkers."""
+
     def __init__(self, max_chunk_size: int) -> None:
+        """Validate and store the maximum chunk size."""
+
         try:
             ChunkSize(max_chunk_size=max_chunk_size)
         except ValidationError as e:
@@ -34,6 +46,8 @@ class Chunker(ABC):
         end: int,
         chunks: list[tuple[int, int]],
     ) -> None:
+        """Append chunk ranges no larger than the configured limit."""
+
         while start < end:
             chunk_end = min(start + self.max_chunk_size, end)
 
@@ -47,4 +61,6 @@ class Chunker(ABC):
 
     @abstractmethod
     def parse_all_files(self, filereader: FilesReader) -> None:
+        """Parse all compatible files from a reader into chunks."""
+
         ...

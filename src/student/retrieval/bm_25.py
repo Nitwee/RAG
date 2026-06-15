@@ -1,3 +1,5 @@
+"""BM25 retrieval backend backed by bm25s."""
+
 import json
 from pathlib import Path
 
@@ -8,17 +10,25 @@ from student.indexing.chunk import Chunk
 
 
 class BM25RetrieverError(Exception):
+    """Raised when BM25 indexing, loading, or searching fails."""
+
     pass
 
 
 class BM25Retriever:
+    """Build, persist, load, and query a BM25 index."""
+
     def __init__(self, chunks: list[Chunk]) -> None:
+        """Create a retriever for a list of chunks."""
+
         self.chunks = chunks
         self.model = bm25s.BM25(corpus=self._corpus_ids())
         self.index_path = Path("data/processed/bm25_index")
         self.chunks_path = Path("data/processed/chunks/chunks.json")
 
     def build(self) -> None:
+        """Tokenize chunks, build the BM25 index, and save it."""
+
         documents = [
             f"{chunk.filepath}\n{chunk.content}"
             for chunk in self.chunks
@@ -28,6 +38,8 @@ class BM25Retriever:
         self.save()
 
     def save(self) -> None:
+        """Persist the BM25 index and chunk metadata to disk."""
+
         try:
             self.index_path.mkdir(parents=True, exist_ok=True)
             self.chunks_path.parent.mkdir(parents=True, exist_ok=True)
@@ -45,6 +57,8 @@ class BM25Retriever:
             raise BM25RetrieverError(f"Cannot save BM25 data: {e}") from e
 
     def search(self, query: str, k: int) -> list[Chunk]:
+        """Return the top-k chunks for a query."""
+
         if k <= 0 or not self.chunks:
             return []
 
@@ -61,6 +75,8 @@ class BM25Retriever:
 
     @classmethod
     def load(cls) -> "BM25Retriever":
+        """Load a persisted BM25 retriever from processed data."""
+
         index_path = Path("data/processed/bm25_index")
         chunks_path = Path("data/processed/chunks/chunks.json")
 
@@ -117,4 +133,6 @@ class BM25Retriever:
         return retriever
 
     def _corpus_ids(self) -> list[str]:
+        """Return stable string ids matching chunk positions."""
+
         return [str(i) for i in range(len(self.chunks))]

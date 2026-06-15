@@ -1,13 +1,21 @@
+"""Small file I/O helper used by CLI workflows."""
+
 from pathlib import Path
 from student.retrieval.bm_25 import BM25Retriever, BM25RetrieverError
 
 
 class ReaderError(Exception):
+    """Raised when input or output files cannot be handled."""
+
     pass
 
 
 class Reader:
+    """Read datasets, write outputs, and load persisted retrieval data."""
+
     def load_bm25(self) -> None:
+        """Load the persisted BM25 retriever."""
+
         try:
             self.retriever = BM25Retriever.load()
         except BM25RetrieverError as e:
@@ -17,6 +25,8 @@ class Reader:
             self,
             dataset_path: str,
             ) -> tuple[str, Path]:
+        """Validate and read a dataset-like JSON file."""
+
         input_path = Path(dataset_path)
         if not input_path.exists():
             raise ReaderError(f"Input_path {dataset_path} doesnt exist")
@@ -26,6 +36,8 @@ class Reader:
         return (content, input_path)
 
     def read_file(self, filepath: Path) -> str:
+        """Read one UTF-8 file as text."""
+
         try:
             content = filepath.read_text(encoding="utf-8")
         except UnicodeDecodeError as e:
@@ -46,6 +58,8 @@ class Reader:
         filename: str,
         result: str,
     ) -> None:
+        """Write a JSON output file under a save directory."""
+
         output_dir = Path(save_directory)
         try:
             output_dir.mkdir(parents=True, exist_ok=True)

@@ -1,3 +1,5 @@
+"""Generate answer result JSON files from search results."""
+
 from pathlib import Path
 from typing import Sequence
 
@@ -17,10 +19,14 @@ from student.reader.reader import Reader, ReaderError
 
 
 class AnswerResultsError(Exception):
+    """Raised when answer result generation fails."""
+
     pass
 
 
 class AnswerResultsFinder:
+    """Build answers for previously retrieved search results."""
+
     def __init__(
         self,
         student_search_results_path: str,
@@ -29,6 +35,8 @@ class AnswerResultsFinder:
         max_new_tokens: int = 256,
         max_context_chars: int = 12000,
     ) -> None:
+        """Load search results, generate answers, and write output."""
+
         self.reader = Reader()
         search_results, input_path = self.load_search_results(
             student_search_results_path
@@ -63,6 +71,8 @@ class AnswerResultsFinder:
         self,
         search_results_path: str,
     ) -> tuple[StudentSearchResults, Path]:
+        """Load and validate a student search result JSON file."""
+
         try:
             content, input_path = self.reader.validate_read(
                 search_results_path
@@ -84,6 +94,8 @@ class AnswerResultsFinder:
         self,
         search_results: Sequence[MinimalSearchResults],
     ) -> list[MinimalAnswer]:
+        """Generate an answer for every search result entry."""
+
         answer_results: list[MinimalAnswer] = []
 
         for search_result in tqdm(search_results, desc="Answering questions"):
@@ -101,9 +113,13 @@ class AnswerResultsFinder:
         return answer_results
 
     def sources_to_chunks(self, sources: list[MinimalSource]) -> list[Chunk]:
+        """Rebuild chunks from stored source metadata."""
+
         return [self.source_to_chunk(source) for source in sources]
 
     def source_to_chunk(self, source: MinimalSource) -> Chunk:
+        """Read a source file range and return it as a chunk."""
+
         filepath = self.resolve_source_path(source.file_path)
         content = self.reader.read_file(filepath)
         start = source.first_character_index
@@ -128,6 +144,8 @@ class AnswerResultsFinder:
             ) from e
 
     def resolve_source_path(self, file_path: str) -> Path:
+        """Resolve and validate a stored source path."""
+
         filepath = Path(file_path)
         if not filepath.exists():
             raise AnswerResultsError(f"Source file not found: {file_path}")

@@ -1,3 +1,5 @@
+"""Recall@k evaluator for retrieved source ranges."""
+
 from student.reader.reader import Reader, ReaderError
 from student.models import (
     StudentSearchResults,
@@ -9,15 +11,21 @@ from pydantic import ValidationError
 
 
 class EvaluatorError(Exception):
+    """Raised when evaluation inputs are invalid."""
+
     pass
 
 
 class Evaluator:
+    """Compare student retrieved sources with ground truth sources."""
+
     def __init__(
             self,
             answers_path: str,
             student_path: str,
             ) -> None:
+        """Load answer and student result files for evaluation."""
+
         self.reader = Reader()
         try:
             answers_content, _ = self.reader.validate_read(answers_path)
@@ -44,6 +52,8 @@ class Evaluator:
             raise EvaluatorError(e)
 
     def analyze(self, k: int) -> float:
+        """Calculate average recall@k over matched questions."""
+
         if not self.student:
             raise EvaluatorError("No student results")
         if not self.answers:
@@ -78,6 +88,8 @@ class Evaluator:
         src_answer: MinimalSource,
         src_student: MinimalSource
     ) -> float:
+        """Return overlap ratio for two sources with matching paths."""
+
         if src_answer.file_path != src_student.file_path:
             return 0.0
 

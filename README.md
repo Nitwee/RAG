@@ -5,30 +5,35 @@
 ## Description
 
 This project implements a Retrieval-Augmented Generation (RAG) system for
-answering questions about the vLLM codebase.
+answering questions about the `vllm-0.10.1` codebase.
 
-The application indexes source files and documentation from `vllm-0.10.1`,
-retrieves the most relevant chunks for a question, and uses the retrieved
-context to generate a grounded answer with a local language model.
+The application reads the vLLM repository, splits source files into searchable
+chunks, builds a persistent BM25 index, retrieves the most relevant source
+locations for each question, and can generate grounded answers with a local
+language model.
 
-The first objective is to build a strong retrieval pipeline. The evaluator
-mainly checks whether the system retrieves the expected source locations for
-each question.
+The main graded objective is retrieval quality: the evaluator checks whether
+the system returns source ranges that overlap with the expected annotations.
 
-## Architecture
+## System Architecture
 
-The project is organized around five main steps:
+The pipeline is organized as follows:
 
-1. Ingestion: read useful files from the vLLM repository.
-2. Chunking: split Python and Markdown files into searchable chunks.
-3. Indexing: build a BM25 or TF-IDF index from the chunks.
-4. Retrieval: return the top-k chunks matching a user question.
-5. Answering: send the question and retrieved context to an LLM.
-
-Expected workflow:
+1. Ingestion: `FilesReader` scans the repository and keeps supported Python,
+   documentation, configuration, shell, C/CUDA, and template files.
+2. Chunking: `PyChunker` uses Python AST nodes for functions and classes, while
+   `TxtChunker` handles the remaining text-like files.
+3. Indexing: `BM25Retriever` tokenizes chunk paths and contents, builds a BM25
+   index, and stores it under `data/processed/`.
+4. Retrieval: CLI commands load the persisted index and return top-k source
+   ranges for a query or a dataset.
+5. Answering: `LLMAnswerer` builds a source-grounded prompt and uses
+   `Qwen/Qwen3-0.6B` by default for answer generation.
+6. Evaluation: `Evaluator` computes a local recall@k score, and the provided
+   moulinette validates the final JSON files.
 
 ```text
-question -> retrieval -> context augmentation -> LLM -> grounded answer
+question -> retrieval -> source context -> LLM -> grounded answer
 ```
 
 ## Instructions
@@ -45,48 +50,112 @@ Run the CLI:
 make run
 ```
 
-Index the vLLM repository:
+Run tests and static checks:
 
 ```bash
-uv run python -m student index --repo_path vllm-0.10.1 --max_chunk_size 2000
+make test
+make lint
 ```
 
-Search a single question:
+Index the vLLM repository with the default BM25 backend:
 
 ```bash
-uv run python -m student search "What endpoint loads a LoRA adapter?" --k 10
+uv run python -m student index \
+  --repo_path data/raw/vllm-0.10.1 \
+  --max_chunk_size 2000
 ```
 
-Search a dataset:
+The optional vector index is only built when requested:
+
+```bash
+uv run python -m student index \
+  --repo_path data/raw/vllm-0.10.1 \
+  --max_chunk_size 2000 \
+  --method hybrid
+```
+
+## Example Usage
+
+Search one question:
+
+```bash
+uv run python -m student search \
+  "What endpoint loads a LoRA adapter?" \
+  --k 10 \
+  --method bm25
+```
+
+Search the public documentation dataset:
 
 ```bash
 uv run python -m student search_dataset \
   --dataset_path datasets_public/public/UnansweredQuestions/dataset_docs_public.json \
   --k 10 \
-  --save_directory data/output/search_results
+  --save_directory data/output/search_results \
+  --method bm25
 ```
 
-Evaluate retrieval results with the provided moulinette:
+Evaluate documentation retrieval with the provided moulinette:
 
 ```bash
-./moulinette/moulinette_pkg/moulinette-ubuntu evaluate_student_search_results \
-  data/output/search_results/dataset_docs_public.json \
-  datasets_public/public/AnsweredQuestions/dataset_docs_public.json \
+./moulinette-ubuntu evaluate_student_search_results \
+  --student_answer_path data/output/search_results/dataset_docs_public.json \
+  --dataset_path datasets_public/public/AnsweredQuestions/dataset_docs_public.json \
   --k 10 \
   --max_context_length 2000 \
   --threshold 0.80
 ```
 
+Search and evaluate the public code dataset:
+
+```bash
+uv run python -m student search_dataset \
+  --dataset_path datasets_public/public/UnansweredQuestions/dataset_code_public.json \
+  --k 10 \
+  --save_directory data/output/search_results \
+  --method bm25
+
+./moulinette-ubuntu evaluate_student_search_results \
+  --student_answer_path data/output/search_results/dataset_code_public.json \
+  --dataset_path datasets_public/public/AnsweredQuestions/dataset_code_public.json \
+  --k 10 \
+  --max_context_length 2000 \
+  --threshold 0.50
+```
+
+Generate an answer for one question:
+
+```bash
+uv run python -m student answer \
+  "How can vLLM serve an OpenAI-compatible API?" \
+  --k 10 \
+  --method bm25
+```
+
+Generate answers from a search result file:
+
+```bash
+uv run python -m student answer_dataset \
+  --student_search_results_path data/output/search_results/dataset_docs_public.json \
+  --save_directory data/output/search_results_and_answer
+```
+
 ## Chunking Strategy
 
-Python files should be chunked around logical code units when possible, such as
-classes and functions. If structural parsing fails, the fallback is text-based
-chunking with a configurable maximum chunk size.
+The maximum chunk size is configurable through `--max_chunk_size` and is
+validated to stay within the subject limit of 2000 characters.
 
-Markdown files should be chunked around headings and sections, then split again
-if a section exceeds the configured maximum size.
+Python files are parsed with the `ast` module. Top-level classes and functions
+become chunks when possible. Oversized functions or methods are split into
+smaller ranges while preserving original character offsets. If a Python file
+cannot be parsed, it falls back to text chunking.
 
-Each chunk must keep its original source metadata:
+Text-like files, including Markdown, reStructuredText, TOML, YAML, shell
+scripts, templates, and C/CUDA sources, are split into bounded character ranges.
+The splitter prefers newline boundaries when a chunk would otherwise exceed the
+configured size.
+
+Every retrieved source keeps the metadata required by the evaluator:
 
 - `file_path`
 - `first_character_index`
@@ -94,52 +163,81 @@ Each chunk must keep its original source metadata:
 
 ## Retrieval Method
 
-The baseline retrieval method will be BM25. It is simple, fast, and well suited
-for source-code and documentation search because exact identifiers, function
-names, paths, and configuration keys often matter.
+The default retrieval method is BM25, implemented with `bm25s`. Each document
+indexed by BM25 contains both the chunk path and the chunk content, which helps
+queries that mention source filenames, identifiers, configuration keys, or API
+names.
 
-The system may later be extended with TF-IDF, query expansion, reranking, or
-embedding-based retrieval.
+The BM25 index and chunk metadata are saved under:
+
+```text
+data/processed/bm25_index/
+data/processed/chunks/chunks.json
+```
+
+Embedding and hybrid retrieval classes are present as optional experiments, but
+BM25 is the default path used for the public evaluation scores below.
 
 ## Performance Analysis
 
-The target metrics are:
+The public datasets were evaluated with `k=10`, `max_context_length=2000`, and
+BM25 retrieval.
 
-- Docs questions: Recall@5 >= 80%
-- Code questions: Recall@5 >= 50%
-- Indexing time: <= 5 minutes
-- Warm retrieval: <= 90 seconds for 1000 questions
+| Dataset | Recall@1 | Recall@3 | Recall@5 | Recall@10 | Threshold |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Docs public | 0.510 | 0.750 | 0.820 | 0.870 | 0.800 |
+| Code public | 0.370 | 0.530 | 0.550 | 0.620 | 0.500 |
 
-Performance should be measured with the provided public datasets before trying
-private evaluation data.
+Both public thresholds pass:
+
+- Documentation questions: Recall@5 = 0.820
+- Code questions: Recall@5 = 0.550
+
+Warm retrieval on the public datasets processes 100 questions in less than one
+second after the BM25 index is loaded, which is comfortably under the required
+90 seconds for 1000 questions.
 
 ## Design Decisions
 
-The project starts with a retrieval-first design. Answer generation depends on
-the quality of retrieved context, so the first milestone is to produce valid
-search result JSON files and improve Recall@5.
+The project is retrieval-first because answer generation depends directly on
+the quality of the retrieved sources.
 
-The implementation uses Pydantic models to validate input and output formats,
-Python Fire for the command-line interface, and tqdm for long-running progress
-bars.
+BM25 is used as the baseline because exact matches are valuable for codebase
+question answering: function names, class names, endpoint names, command-line
+flags, file paths, and configuration fields often appear verbatim in questions.
+
+Pydantic models validate datasets, search results, answers, and chunk metadata.
+Python Fire provides the required CLI, and tqdm progress bars are used for
+long-running dataset processing and indexing operations.
+
+The index command builds BM25 by default to keep the mandatory path fast and
+lightweight. Embedding-based retrieval remains optional because it requires
+additional model downloads and memory.
 
 ## Challenges
 
-The main difficulty is producing chunks that are small enough for evaluation and
-LLM context limits, but large enough to preserve useful information.
+The main challenge is balancing chunk size and context quality. Small chunks
+improve source overlap scoring but can lose surrounding explanation; large
+chunks preserve context but may miss the 5% overlap threshold or exceed context
+limits.
 
-Another important detail is path normalization. The evaluator expects source
-paths compatible with the dataset annotations, usually under
+Path normalization is also important. Retrieved paths must match the dataset
+annotations, so chunks preserve their original paths under
 `data/raw/vllm-0.10.1/...`.
+
+Another challenge is keeping the default workflow reproducible without relying
+on large model downloads. For that reason, BM25 is the stable default and local
+LLM generation is isolated in the answer commands.
 
 ## Resources
 
 - vLLM documentation: https://docs.vllm.ai/
-- Python `ast` module documentation: https://docs.python.org/3/library/ast.html
+- Python `ast` module: https://docs.python.org/3/library/ast.html
 - Pydantic documentation: https://docs.pydantic.dev/
 - Python Fire documentation: https://github.com/google/python-fire
 - BM25 overview: https://en.wikipedia.org/wiki/Okapi_BM25
+- Qwen model family: https://huggingface.co/Qwen
 
-AI was used to clarify the project requirements, design the initial project
-structure, and explain the RAG pipeline. All generated content must be reviewed,
-tested, and understood before submission.
+AI was used to clarify the project requirements, review edge cases, improve the
+README structure, and identify missing documentation. All generated content was
+reviewed and tested before submission.

@@ -29,14 +29,16 @@ class AnalyzerCLI:
         self,
         repo_path: str = "data/raw/vllm-0.10.1",
         max_chunk_size: int = 2000,
+        method: str = "bm25",
     ) -> None:
         """Index the vLLM repository."""
         try:
             self.manager = IndexManager(repo_path, max_chunk_size)
             retriever = BM25Retriever(self.manager.chunks)
             retriever.build()
-            vectorizer = Vectorizer(retriever.chunks)
-            vectorizer.build()
+            if method in ("hybrid", "vector"):
+                vectorizer = Vectorizer(retriever.chunks)
+                vectorizer.build()
         except (IndexManagerError, BM25RetrieverError, VectorizerError) as e:
             print(f"Error: {e}", file=sys.stderr)
             return

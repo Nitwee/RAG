@@ -1,3 +1,5 @@
+"""AST-based chunking for Python source files."""
+
 import ast
 from pydantic import ValidationError
 from student.indexing.files_reader import SourceFile, FilesReader
@@ -5,18 +7,26 @@ from student.indexing.chunk import Chunk, Chunker, ChunkError
 
 
 class PyChunker(Chunker):
+    """Split Python files around classes and functions."""
+
     def __init__(self, max_chunk_size: int) -> None:
+        """Initialize an empty Python chunk collection."""
+
         super().__init__(max_chunk_size)
         self.chunks: list[Chunk] = []
         self.max_chunk_size = max_chunk_size
 
     def parse_all_files(self, filereader: FilesReader) -> None:
+        """Parse all Python files, falling back to text on syntax errors."""
+
         for file in filereader.py_files:
             if not self.parse_file(file):
                 file.kind = "text"
                 filereader.txt_files.append(file)
 
     def parse_file(self, file: SourceFile) -> bool:
+        """Parse one Python file and append its chunks."""
+
         try:
             offsets = self.lines_to_offsets(file.content)
             tree = ast.parse(file.content)
@@ -46,6 +56,8 @@ class PyChunker(Chunker):
             content: str,
             offsets: list[int]
             ) -> list[tuple[int, int]]:
+        """Return source ranges for top-level Python code units."""
+
         chunks: list[tuple[int, int]] = []
         header_end = None
 
@@ -87,6 +99,8 @@ class PyChunker(Chunker):
         offsets: list[int],
         chunks: list[tuple[int, int]]
     ) -> None:
+        """Add one function or method range, splitting if needed."""
+
         start, end = self.node_range(func, offsets)
         self.add_range(content, start, end, chunks)
 
@@ -95,6 +109,8 @@ class PyChunker(Chunker):
         node: ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef,
         offsets: list[int],
     ) -> tuple[int, int]:
+        """Convert an AST node line span to character offsets."""
+
         start_line = node.lineno
         end_line = node.end_lineno
 
@@ -110,6 +126,8 @@ class PyChunker(Chunker):
         return start, end
 
     def lines_to_offsets(self, content: str) -> list[int]:
+        """Build a line-number to character-offset lookup table."""
+
         offsets: list[int] = [0]
         current = 0
 

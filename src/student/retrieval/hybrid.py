@@ -1,22 +1,32 @@
+"""Hybrid retrieval that interleaves BM25 and vector results."""
+
 from student.indexing.chunk import Chunk
 from student.retrieval.bm_25 import BM25Retriever, BM25RetrieverError
 from student.retrieval.vectorizer import Vectorizer, VectorizerError
 
 
 class HybridRetrieverError(Exception):
+    """Raised when the hybrid retriever cannot be loaded or queried."""
+
     pass
 
 
 class HybridRetriever:
+    """Combine BM25 and embedding retrievers with a fixed pattern."""
+
     def __init__(
         self,
         bm25: BM25Retriever,
         vectorizer: Vectorizer,
     ) -> None:
+        """Store the component retrievers."""
+
         self.bm25 = bm25
         self.vectorizer = vectorizer
 
     def search(self, query: str, k: int) -> list[Chunk]:
+        """Return unique chunks from BM25 and vector candidates."""
+
         if k <= 0:
             return []
 
@@ -42,6 +52,8 @@ class HybridRetriever:
 
     @classmethod
     def load(cls) -> "HybridRetriever":
+        """Load both persisted retrievers and combine them."""
+
         try:
             return cls(
                 bm25=BM25Retriever.load(),
@@ -51,6 +63,8 @@ class HybridRetriever:
             raise HybridRetrieverError(f"Cannot load hybrid retriever: {e}")
 
     def _build_pattern(self, k: int) -> list[str]:
+        """Build the source pattern used to interleave candidates."""
+
         pattern = ["bm25", "bm25", "bm25", "bm25", "vector"]
         if k > 5:
             pattern += ["bm25", "bm25", "bm25", "vector", "vector"]
@@ -61,6 +75,8 @@ class HybridRetriever:
         chunks: list[Chunk],
         candidates: list[Chunk],
     ) -> bool:
+        """Append the next unseen candidate to the result list."""
+
         seen = {
             (
                 chunk.filepath,

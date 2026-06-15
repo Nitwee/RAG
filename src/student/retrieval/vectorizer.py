@@ -1,3 +1,5 @@
+"""Embedding-based retrieval backend using sentence-transformers."""
+
 import json
 from pathlib import Path
 
@@ -10,15 +12,21 @@ from student.indexing.chunk import Chunk
 
 
 class VectorizerError(Exception):
+    """Raised when vector indexing, loading, or searching fails."""
+
     pass
 
 
 class Vectorizer:
+    """Build, persist, load, and query dense embeddings."""
+
     def __init__(
         self,
         chunks: list[Chunk],
         model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
     ) -> None:
+        """Create a vector retriever for chunks and a model name."""
+
         self.chunks = chunks
         self.model_name = model_name
         self.model = SentenceTransformer(model_name)
@@ -27,6 +35,8 @@ class Vectorizer:
         self.chunks_path = Path("data/processed/chunks/chunks.json")
 
     def build(self) -> None:
+        """Encode indexed chunks and save the embedding matrix."""
+
         documents = [
             f"{chunk.filepath}\n{chunk.content}"
             for chunk in self.chunks
@@ -42,6 +52,8 @@ class Vectorizer:
         self.save()
 
     def save(self) -> None:
+        """Persist embeddings to disk."""
+
         if self.embeddings is None:
             raise VectorizerError("No embeddings to save")
 
@@ -52,6 +64,8 @@ class Vectorizer:
             raise VectorizerError(f"Cannot save embeddings: {e}") from e
 
     def search(self, query: str, k: int) -> list[Chunk]:
+        """Return the top-k chunks by cosine similarity."""
+
         if k <= 0 or not self.chunks:
             return []
         if self.embeddings is None:
@@ -74,6 +88,8 @@ class Vectorizer:
         cls,
         model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
     ) -> "Vectorizer":
+        """Load persisted chunks and embeddings for vector search."""
+
         chunks_path = Path("data/processed/chunks/chunks.json")
         embeddings_path = Path("data/processed/embeddings/embeddings.npy")
 

@@ -1,19 +1,27 @@
+"""Question answering with a local causal language model."""
+
 from typing import Any
 
 from student.indexing.chunk import Chunk
 
 
 class LLMAnswererError(Exception):
+    """Raised when model loading or generation fails."""
+
     pass
 
 
 class LLMAnswerer:
+    """Generate source-grounded answers from retrieved chunks."""
+
     def __init__(
         self,
         model_name: str = "Qwen/Qwen3-0.6B",
         max_new_tokens: int = 256,
         max_context_chars: int = 12000,
     ) -> None:
+        """Store generation settings without loading the model yet."""
+
         self.model_name = model_name
         self.max_new_tokens = max_new_tokens
         self.max_context_chars = max_context_chars
@@ -22,11 +30,15 @@ class LLMAnswerer:
         self.device = "cpu"
 
     def answer(self, question: str, chunks: list[Chunk]) -> str:
+        """Generate an answer for a question using retrieved chunks."""
+
         self.load_model()
         prompt = self.build_prompt(question, chunks)
         return self.generate(prompt)
 
     def load_model(self) -> None:
+        """Load the tokenizer and model on first use."""
+
         if self.model is not None and self.tokenizer is not None:
             return
 
@@ -57,6 +69,8 @@ class LLMAnswerer:
             ) from e
 
     def build_prompt(self, question: str, chunks: list[Chunk]) -> str:
+        """Create the grounded instruction prompt for the LLM."""
+
         context = self.build_context(chunks)
         return (
             "Use only the sources below to answer the question.\n"
@@ -69,6 +83,8 @@ class LLMAnswerer:
         )
 
     def build_context(self, chunks: list[Chunk]) -> str:
+        """Format retrieved chunks within the context character limit."""
+
         parts: list[str] = []
         used_chars = 0
 
@@ -89,6 +105,8 @@ class LLMAnswerer:
         return "\n\n".join(parts)
 
     def generate(self, prompt: str) -> str:
+        """Run deterministic text generation for a prompt."""
+
         if self.model is None or self.tokenizer is None:
             raise LLMAnswererError("Model is not loaded")
 
