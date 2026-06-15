@@ -7,7 +7,13 @@ import fire
 
 from student.generation.answerer import LLMAnswerer, LLMAnswererError
 from student.indexing.index_manager import IndexManager, IndexManagerError
-from student.models import MinimalAnswer, MinimalSource
+from student.models import (
+    MinimalAnswer,
+    MinimalSearchResults,
+    MinimalSource,
+    StudentSearchResults,
+    StudentSearchResultsAndAnswer,
+)
 from student.retrieval.bm_25 import BM25Retriever, BM25RetrieverError
 from student.retrieval.hybrid import HybridRetriever, HybridRetrieverError
 from student.retrieval.vectorizer import Vectorizer, VectorizerError
@@ -25,6 +31,12 @@ from student.evaluator.eval import Evaluator, EvaluatorError
 class AnalyzerCLI:
     """CLI commands expected by the project subject."""
 
+    def fail(self, message: str) -> None:
+        """Print a CLI error and exit with a failing status code."""
+
+        print(message, file=sys.stderr)
+        raise SystemExit(1)
+
     def index(
         self,
         repo_path: str = "data/raw/vllm-0.10.1",
@@ -40,8 +52,7 @@ class AnalyzerCLI:
                 vectorizer = Vectorizer(retriever.chunks)
                 vectorizer.build()
         except (IndexManagerError, BM25RetrieverError, VectorizerError) as e:
-            print(f"Error: {e}", file=sys.stderr)
-            return
+            self.fail(f"Error: {e}")
         print(f"Indexing {repo_path} with max_chunk_size={max_chunk_size}")
         print("Ingestion complete! Indices saved under data/processed/")
 
@@ -61,14 +72,27 @@ class AnalyzerCLI:
             VectorizerError,
             HybridRetrieverError,
         ) as e:
-            print(f"Error: {e}", file=sys.stderr)
-            return
-        for chunk in chunks:
-            print(
-                f"{chunk.filepath}:"
-                f"{chunk.first_character_index}-"
-                f"{chunk.last_character_index}"
+            self.fail(f"Error: {e}")
+
+        sources = [
+            MinimalSource(
+                file_path=str(chunk.filepath),
+                first_character_index=chunk.first_character_index,
+                last_character_index=chunk.last_character_index,
             )
+            for chunk in chunks
+        ]
+        result = StudentSearchResults(
+            search_results=[
+                MinimalSearchResults(
+                    question_id=str(uuid.uuid4()),
+                    question_str=query,
+                    retrieved_sources=sources,
+                )
+            ],
+            k=k,
+        )
+        print(result.model_dump_json(indent=2))
 
     def search_dataset(
         self,
@@ -89,8 +113,7 @@ class AnalyzerCLI:
                 method=method,
             )
         except SearchResultsError as e:
-            print(e)
-            return
+            self.fail(str(e))
 
     def answer(
         self,
@@ -131,10 +154,13 @@ class AnalyzerCLI:
             HybridRetrieverError,
             LLMAnswererError,
         ) as e:
-            print(f"Error: {e}", file=sys.stderr)
-            return
+            self.fail(f"Error: {e}")
 
-        print(result.model_dump_json(indent=2))
+        output = StudentSearchResultsAndAnswer(
+            search_results=[result],
+            k=k,
+        )
+        print(output.model_dump_json(indent=2))
 
     def load_retriever(
         self,
@@ -168,8 +194,7 @@ class AnalyzerCLI:
                 max_context_chars=max_context_chars,
             )
         except AnswerResultsError as e:
-            print(e)
-            return
+            self.fail(str(e))
 
     def evaluate(
         self,
@@ -191,8 +216,7 @@ class AnalyzerCLI:
             print(f"Recall@{k}: {score:.3f}")
 
         except EvaluatorError as e:
-            print(e)
-            return
+            self.fail(str(e))
 
 
 def main() -> None:
